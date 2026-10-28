@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://cceoprxc4p41v"]
+
+[ext_resource type="Script" uid="uid://jph8swvcp6ll" path="res://scripts/car.gd" id="1_c35m8"]
+[ext_resource type="PackedScene" uid="uid://dlfxa84g3yus" path="res://assets/Cars/Models/FBX format/vehicle-speedster.fbx" id="2_qt2eu"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_qt2eu"]
+radius = 0.3
+
+[node name="car" type="CharacterBody3D" unique_id=1948521291]
+floor_stop_on_slope = false
+floor_constant_speed = true
+floor_block_on_wall = false
+floor_snap_length = 0.0
+script = ExtResource("1_c35m8")
+
+[node name="vehicle-speedster" parent="." unique_id=1546913670 instance=ExtResource("2_qt2eu")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=905247888]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.3, 0.093)
+shape = SubResource("SphereShape3D_qt2eu")
+
+[node name="orientator" type="Node3D" parent="." unique_id=2125398487]
+
+[editable path="vehicle-speedster"]

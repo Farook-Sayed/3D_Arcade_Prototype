@@ -1,0 +1,114 @@
+class_name Car
+extends CharacterBody3D
+
+const ACCELERATION_SPEED = 10.0
+const REVERSE_SPEED = 5.0
+
+const DRIFT_ACCELERATION_FACTOR = 0.5
+const DRIFT_STRAFE_SPEED = 2.0
+
+const STEERING_SPEED = 10.0
+const MAX_STEERING_ANGLE = 30.0
+const DRIFT_STEER_FACTOR = 2.0
+
+const BRAKE_FRICTION = 10.0
+const CRUISE_FRICTION = 1.0
+const DRIFT_FRICTION = 2.0
+
+var forward_velocity := 0.0
+var strafe_velocity := 0.0
+var steering_angle := 0.0
+var forward_direction : Vector3 = Vector3.FORWARD
+var right_direction : Vector3 = Vector3.RIGHT
+
+@onready var wheel_fl: MeshInstance3D = $"vehicle-speedster/vehicle-speedster/wheel-fl"
+@onready var wheel_fr: MeshInstance3D = $"vehicle-speedster/vehicle-speedster/wheel-fr"
+@onready var wheel_bl: MeshInstance3D = $"vehicle-speedster/vehicle-speedster/wheel-bl"
+@onready var wheel_br: MeshInstance3D = $"vehicle-speedster/vehicle-speedster/wheel-br"
+@onready var vehicle: MeshInstance3D = $"vehicle-speedster/vehicle-speedster"
+
+func _physics_process(delta: float) -> void:
+	# Add the gravity.
+	if not is_on_floor():
+		velocity += get_gravity() * delta
+		# if air control
+		move_and_slide()
+		return
+		
+	var forward_acceleration : float = 0.0
+	var strafe_acceleration : float = 0.0
+	var wheel_friction := CRUISE_FRICTION
+	var surface_friction := BRAKE_FRICTION
+	
+	forward_velocity = velocity.dot(forward_direction)
+	strafe_velocity = velocity.dot(right_direction)
+	
+	if Input.is_action_pressed("accelerate"):
+		forward_acceleration += ACCELERATION_SPEED
+	elif Input.is_action_pressed("reverse"):
+		if forward_velocity <= 0.1: # reverse
+			forward_acceleration -= REVERSE_SPEED
+		else: # brake
+			wheel_friction = surface_friction
+	
+	# handle steering
+	var target_steering_angle = 0.0
+	if Input.is_action_pressed("steer_left"):
+		target_steering_angle += MAX_STEERING_ANGLE
+	if Input.is_action_pressed("steer_right"):
+		target_steering_angle -= MAX_STEERING_ANGLE
+	
+	steering_angle = lerp(steering_angle, target_steering_angle, Easing.exp_smooth(STEERING_SPEED, delta))
+	
+	var steering_factor := (forward_velocity + strafe_velocity) / (ACCELERATION_SPEED * 7)
+	
+	# apply hand brake
+	var handbrake_active := Input.is_action_pressed("handbrake") and (forward_acceleration > 0.0 or forward_velocity > 0.0)
+	if handbrake_active:
+		strafe_acceleration += (steering_angle / MAX_STEERING_ANGLE) * DRIFT_STRAFE_SPEED
+		forward_velocity *= DRIFT_ACCELERATION_FACTOR
+		wheel_friction = BRAKE_FRICTION
+		surface_friction = DRIFT_FRICTION
+		steering_factor *= DRIFT_STEER_FACTOR
+		
+	# rotation of vehicle body and wheels
+	vehicle.rotation_degrees = vehicle.rotation_degrees.lerp(
+		Vector3(0.0, steering_angle * steering_factor, steering_angle * 0.5 * steering_factor) if handbrake_active else Vector3.ZERO,
+		Easing.exp_smooth(STEERING_SPEED, delta)	
+	)
+	
+	var circumference_fl : float = wheel_fl.get_aabb().get_longest_axis_size() * PI
+	var circumference_fr : float = wheel_fr.get_aabb().get_longest_axis_size() * PI
+	var circumference_bl : float = wheel_bl.get_aabb().get_longest_axis_size() * PI
+	var circumference_br : float = wheel_br.get_aabb().get_longest_axis_size() * PI
+	
+	wheel_fl.rotation_degrees = Vector3(
+		wheel_fl.rotation_degrees.x - (forward_velocity / circumference_fl), 
+		steering_angle - (vehicle.rotation_degrees.y * 2.0), 0.0)
+	wheel_fr.rotation_degrees = Vector3(
+		wheel_fr.rotation_degrees.x - (forward_velocity / circumference_fr), 
+		steering_angle - (vehicle.rotation_degrees.y * 2.0), 0.0)
+		
+	wheel_bl.rotation_degrees = Vector3(
+		wheel_bl.rotation_degrees.x - (forward_velocity / circumference_bl), 
+		0.0, 0.0)
+	wheel_br.rotation_degrees = Vector3(
+		wheel_br.rotation_degrees.x - (forward_velocity / circumference_br), 
+		0.0, 0.0)
+		
+	# apply local velocity
+	forward_velocity += ((forward_acceleration * wheel_friction) - (forward_velocity * wheel_friction)) * delta
+	strafe_velocity += ((strafe_acceleration * surface_friction) - (strafe_velocity * surface_friction)) * delta
+	
+	# apply steer
+	rotate_y(deg_to_rad(steering_angle * steering_factor))
+	forward_direction = get_global_transform().basis * Vector3.FORWARD
+	right_direction = get_global_transform().basis * Vector3.RIGHT
+	
+	# apply velocity
+	velocity = (forward_direction * forward_velocity) + (right_direction * strafe_velocity) + Vector3(0.0, velocity.y, 0.0)
+
+	move_and_slide()
+	
+func lerp(a, b, t : float) -> float:
+	return a + (b - a) * t
